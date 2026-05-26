@@ -267,6 +267,11 @@ export function AgentTranscriptDialog({
     if (!open) return;
     let cancelled = false;
 
+    // Reset stale data from a previously viewed task before new fetches complete.
+    setAgentInfo(null);
+    setRuntimeInfo(null);
+    setTaskUsage(null);
+
     if (task.agent_id) {
       api.getAgent(task.agent_id).then((agent) => {
         if (!cancelled) setAgentInfo(agent);
@@ -501,7 +506,7 @@ export function AgentTranscriptDialog({
             </MetadataChip>
 
             {/* Token usage */}
-            {taskUsage && (taskUsage.total_input_tokens > 0 || taskUsage.total_output_tokens > 0) && (
+            {taskUsage && (taskUsage.total_input_tokens > 0 || taskUsage.total_output_tokens > 0 || taskUsage.total_cache_write_tokens > 0) && (
               <MetadataChip icon={<Coins className="h-3 w-3" />}>
                 {formatTokenUsage(taskUsage)}
               </MetadataChip>
