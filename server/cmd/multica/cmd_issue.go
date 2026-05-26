@@ -1026,7 +1026,7 @@ func runIssueCommentList(cmd *cobra.Command, args []string) error {
 	headers := []string{"ID", "PARENT", "AUTHOR", "TYPE", "CONTENT", "CREATED"}
 	rows := make([][]string, 0, len(comments))
 	for _, c := range comments {
-		content := strVal(c, "content")
+		content := strings.Join(strings.Fields(strVal(c, "content")), " ")
 		if utf8.RuneCountInString(content) > 80 {
 			runes := []rune(content)
 			content = string(runes[:77]) + "..."
