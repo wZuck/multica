@@ -19,6 +19,7 @@ import {
   Filter,
   ArrowDownNarrowWide,
   ArrowUpNarrowWide,
+  Coins,
 } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import { Dialog, DialogContent, DialogTitle } from "@multica/ui/components/ui/dialog";
@@ -34,7 +35,7 @@ import {
 import { ActorAvatar } from "../actor-avatar";
 import { api } from "@multica/core/api";
 import { useTranscriptViewStore, type TranscriptSortDirection } from "@multica/core/agents/stores";
-import type { AgentTask, Agent, AgentRuntime } from "@multica/core/types/agent";
+import type { AgentTask, Agent, AgentRuntime, TaskUsageSummary } from "@multica/core/types/agent";
 import { redactSecrets } from "./redact";
 import type { TimelineItem } from "./build-timeline";
 import { useT } from "../../i18n";
@@ -163,6 +164,29 @@ function formatElapsedMs(ms: number): string {
   return `${minutes}m ${secs}s`;
 }
 
+// Format a token count into a compact human-readable string: K / M / B suffix.
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  return String(n);
+}
+
+// Format token usage as: inputTotal(cacheHit%)/output
+// e.g. "192M(92%)/12K" — total input (including cache reads), cache hit rate, output
+function formatTokenUsage(usage: TaskUsageSummary): string {
+  const totalInput = usage.total_input_tokens + usage.total_cache_read_tokens + usage.total_cache_write_tokens;
+  const outputTokens = usage.total_output_tokens;
+  const cacheHitPct =
+    totalInput > 0 ? Math.round((usage.total_cache_read_tokens / totalInput) * 100) : 0;
+  const inputStr = formatTokenCount(totalInput);
+  const outputStr = formatTokenCount(outputTokens);
+  if (usage.total_cache_read_tokens > 0) {
+    return `${inputStr}(${cacheHitPct}%)/${outputStr}`;
+  }
+  return `${inputStr}/${outputStr}`;
+}
+
 // ─── Main dialog ────────────────────────────────────────────────────────────
 
 export function AgentTranscriptDialog({
@@ -180,6 +204,7 @@ export function AgentTranscriptDialog({
   const [copied, setCopied] = useState(false);
   const [agentInfo, setAgentInfo] = useState<Agent | null>(null);
   const [runtimeInfo, setRuntimeInfo] = useState<AgentRuntime | null>(null);
+  const [taskUsage, setTaskUsage] = useState<TaskUsageSummary | null>(null);
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set());
   const sortDirection = useTranscriptViewStore((s) => s.sortDirection);
   const setSortDirection = useTranscriptViewStore((s) => s.setSortDirection);
@@ -256,8 +281,12 @@ export function AgentTranscriptDialog({
       }).catch(() => {});
     }
 
+    api.getTaskUsage(task.id).then((usage) => {
+      if (!cancelled) setTaskUsage(usage);
+    }).catch(() => {});
+
     return () => { cancelled = true; };
-  }, [open, task.agent_id, task.runtime_id]);
+  }, [open, task.id, task.agent_id, task.runtime_id]);
 
   // Elapsed time for live tasks
   useEffect(() => {
@@ -470,6 +499,13 @@ export function AgentTranscriptDialog({
                 ? t(($) => $.transcript.events_filtered, { shown: filteredItems.length, total: items.length })
                 : t(($) => $.transcript.events, { count: items.length })}
             </MetadataChip>
+
+            {/* Token usage */}
+            {taskUsage && (taskUsage.total_input_tokens > 0 || taskUsage.total_output_tokens > 0) && (
+              <MetadataChip icon={<Coins className="h-3 w-3" />}>
+                {formatTokenUsage(taskUsage)}
+              </MetadataChip>
+            )}
 
             {/* Created time */}
             {task.created_at && (

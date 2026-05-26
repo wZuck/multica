@@ -2118,6 +2118,51 @@ func (h *Handler) ListTaskMessagesByUser(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// GetTaskUsageByUser returns aggregated token usage for a single task.
+// Used by the frontend under regular user auth (not daemon auth).
+// Verifies the task belongs to the caller's workspace.
+func (h *Handler) GetTaskUsageByUser(w http.ResponseWriter, r *http.Request) {
+	taskID := chi.URLParam(r, "taskId")
+	taskUUID, ok := parseUUIDOrBadRequest(w, taskID, "task_id")
+	if !ok {
+		return
+	}
+
+	task, err := h.Queries.GetAgentTask(r.Context(), taskUUID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+
+	// Verify the task belongs to the caller's workspace.
+	wsID := h.TaskService.ResolveTaskWorkspaceID(r.Context(), task)
+	if wsID == "" || wsID != middleware.WorkspaceIDFromContext(r.Context()) {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+
+	rows, err := h.Queries.GetTaskUsage(r.Context(), taskUUID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get task usage")
+		return
+	}
+
+	var totalInput, totalOutput, totalCacheRead, totalCacheWrite int64
+	for _, row := range rows {
+		totalInput += row.InputTokens
+		totalOutput += row.OutputTokens
+		totalCacheRead += row.CacheReadTokens
+		totalCacheWrite += row.CacheWriteTokens
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total_input_tokens":       totalInput,
+		"total_output_tokens":      totalOutput,
+		"total_cache_read_tokens":  totalCacheRead,
+		"total_cache_write_tokens": totalCacheWrite,
+	})
+}
+
 // GetIssueUsage returns aggregated token usage for all tasks belonging to an issue.
 func (h *Handler) GetIssueUsage(w http.ResponseWriter, r *http.Request) {
 	issueID := chi.URLParam(r, "id")

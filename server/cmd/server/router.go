@@ -426,6 +426,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 
 			// Task messages (user-facing, not daemon auth)
 			r.Get("/api/tasks/{taskId}/messages", h.ListTaskMessagesByUser)
+			r.Get("/api/tasks/{taskId}/usage", h.GetTaskUsageByUser)
 
 			// Labels
 			r.Route("/api/labels", func(r chi.Router) {

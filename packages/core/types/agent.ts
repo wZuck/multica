@@ -383,6 +383,13 @@ export interface IssueUsageSummary {
   task_count: number;
 }
 
+export interface TaskUsageSummary {
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cache_read_tokens: number;
+  total_cache_write_tokens: number;
+}
+
 export interface RuntimeUsage {
   runtime_id: string;
   date: string;
